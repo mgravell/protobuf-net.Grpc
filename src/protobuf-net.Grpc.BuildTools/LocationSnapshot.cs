@@ -3,38 +3,37 @@ using Microsoft.CodeAnalysis.Text;
 
 namespace ProtoBuf.Grpc.BuildTools;
 
-internal readonly record struct LocationSnapshot(string FilePath, TextSpan TextSpan, LinePositionSpan LineSpan)
+internal readonly record struct LocationSnapshot(string FilePath, TextSpan TextSpan)
 {
     public override string ToString()
+        => FilePath is null ? "(no location)" : $"{FilePath} C{TextSpan.Start}-{TextSpan.End}";
+
+    public Location? GetLocation(IEnumerable<SyntaxTree> trees)
     {
-        if (FilePath is null) return "(no location)";
-
-        if (LineSpan.Start.Line == LineSpan.End.Line)
+        if (FilePath is not null && trees is not null)
         {
-            // single-line
-            return $"{FilePath} L{LineSpan.Start.Line}#{LineSpan.Start.Character}-{LineSpan.End.Character}";
+            foreach (var tree in trees)
+            {
+                if (tree.FilePath == FilePath)
+                {
+                    return Location.Create(tree, TextSpan);
+                }
+            }
         }
-        // multi-line
-        return $"{FilePath} L{LineSpan.Start.Line}#{LineSpan.Start.Character}-L{LineSpan.End.Line}#{LineSpan.End.Character}";
+
+        return null;
     }
-
-    public static implicit operator Location?(LocationSnapshot value) => value.AsLocation();
-
-    public Location? AsLocation() => FilePath is null ? null : Location.Create(FilePath, TextSpan, LineSpan);
 
     public static LocationSnapshot Create(ISymbol symbol)
     {
         foreach (var location in symbol.Locations)
         {
-            var mapped = location.GetMappedLineSpan();
-            if (mapped.IsValid && mapped.Path is not null)
-            {
-                return new LocationSnapshot(mapped.Path, location.SourceSpan, mapped.Span);
-            }
+            // there are other things we can do with linespan/mappedlinespan,
+            // but we'll keep things simple for now
             var path = location.SourceTree?.FilePath;
             if (path is not null)
             {
-                return new LocationSnapshot(path, location.SourceSpan, mapped.Span);
+                return new LocationSnapshot(path, location.SourceSpan);
             }
         }
         return default;

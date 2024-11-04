@@ -76,13 +76,14 @@ public sealed class ServiceGenerator : DiagnosticAnalyzer, IIncrementalGenerator
             Log?.Invoke($"Generating from {tuple.Right.Length} values");
 
             List<Service>? services = null;
+            var syntaxTrees = tuple.Left.SyntaxTrees;
             foreach (var obj in tuple.Right)
             {
                 if (obj is Service svc)
                 {
                     if (svc.IsInvalid)
                     {
-                        context.ReportDiagnostic(Diagnostic.Create(Diagnostics.InvalidService, svc.Location));
+                        context.ReportDiagnostic(Diagnostic.Create(Diagnostics.InvalidService, svc.Location.GetLocation(syntaxTrees)));
                     }
                     else
                     {
@@ -96,7 +97,6 @@ public sealed class ServiceGenerator : DiagnosticAnalyzer, IIncrementalGenerator
                 Log?.Invoke("No valid services detected; nothing to do");
                 return;
             }
-
 
             Log?.Invoke($"{services.Count} services detected; generating");
             var sb = new StringBuilder();
