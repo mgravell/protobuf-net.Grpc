@@ -41,10 +41,10 @@ namespace ProtoBuf.Grpc.Internal
         internal static readonly ConstructorInfo s_CallContext_FromServerContext = typeof(CallContext).GetConstructor([typeof(object), typeof(ServerCallContext)])!;
         internal static readonly PropertyInfo s_ServerContext_CancellationToken = typeof(ServerCallContext).GetProperty(nameof(ServerCallContext.CancellationToken))!;
 
+#pragma warning disable CS0618, CA1859, IDE0060 // Reshape [Obsolete], explicit return type, unused arg
         static Expression ToCallContext(Expression server, Expression context) => Expression.New(s_CallContext_FromServerContext, server, context);
         static Expression ToCancellationToken(Expression context) => Expression.Property(context, s_ServerContext_CancellationToken);
 
-#pragma warning disable CS0618 // Reshape
         static Expression AsAsyncEnumerable(Expression value, Expression context)
             => Expression.Call(typeof(Reshape), nameof(Reshape.AsAsyncEnumerable),
                 typeArguments: value.Type.GetGenericArguments(),
@@ -71,12 +71,11 @@ namespace ProtoBuf.Grpc.Internal
                 arguments: [ToTaskT(value), writer, context, ConstantBoolean(writeTrailer)]);
 
         private static Expression ConstantBoolean(bool value) => value ? True : False;
-        private static Expression True = Expression.Constant(true, typeof(bool)), False = Expression.Constant(false, typeof(bool));
+        private static readonly Expression True = Expression.Constant(true, typeof(bool)), False = Expression.Constant(false, typeof(bool));
 
         internal static bool TryGetValue(MethodType MethodType, ContextKind Context, ResultKind Arg, ResultKind Result, VoidKind Void, out Func<MethodInfo, Expression[], Expression>? invoker)
             => _invokers.TryGetValue((MethodType, Context, Arg, Result, Void), out invoker);
-
-#pragma warning restore CS0618
+#pragma warning restore CS0618, CA1859,IDE0060
 
         private static readonly Dictionary<(MethodType Method, ContextKind Context, ResultKind Arg,ResultKind Result, VoidKind Void), Func<MethodInfo, Expression[], Expression>?> _invokers
             = new Dictionary<(MethodType, ContextKind, ResultKind, ResultKind, VoidKind), Func<MethodInfo, Expression[], Expression>?>
