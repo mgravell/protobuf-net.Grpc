@@ -6,6 +6,7 @@ using CSharpKind = Microsoft.CodeAnalysis.CSharp.SyntaxKind;
 using VBKind = Microsoft.CodeAnalysis.VisualBasic.SyntaxKind;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.VisualBasic.Syntax;
+using System;
 
 namespace ProtoBuf.Grpc.BuildTools;
 
@@ -47,22 +48,14 @@ public sealed class ServiceGenerator : DiagnosticAnalyzer, IIncrementalGenerator
     {
         try
         {
-            var symbol = context.SemanticModel.GetDeclaredSymbol(context.Node, token);
-            if (symbol is null) return Missing;
-
             // check for [Service] or [ServiceContract]
-            bool isService = false;
-            foreach (var attribute in symbol.GetAttributes())
+            if (context.SemanticModel.GetDeclaredSymbol(context.Node, token) is not INamedTypeSymbol symbol)
             {
-                if (attribute.IsType("ProtoBuf", "Grpc", "Configuration", "ServiceAttribute")
-                    || attribute.IsType("System", "ServiceModel", "ServiceContractAttribute"))
-                {
-                    isService = true;
-                    break;
-                }
+                return Missing;
             }
 
-            if (!isService)
+            var route = GetServiceRoute(symbol);
+            if (route is null)
             {
                 return Missing;
             }
@@ -70,6 +63,8 @@ public sealed class ServiceGenerator : DiagnosticAnalyzer, IIncrementalGenerator
             Log?.Invoke($"Accepting type: {symbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}");
 
             //TODO build service DTO
+            return new Service(symbol.Name,
+                route, symbol.ContainingNamespace?.ToDisplayString)
         }
         catch (Exception ex)
         {
@@ -78,47 +73,68 @@ public sealed class ServiceGenerator : DiagnosticAnalyzer, IIncrementalGenerator
         return Missing;
     }
 
+
+    public static string? GetServiceRoute(INamedTypeSymbol type)
+    {
+        if (type is not null)
+        {
+            foreach (var attribute in type.GetAttributes())
+            {
+                var route = GetServiceRoute(attribute);
+                if (route is not null) return route;
+            }
+        }
+        return null;
+    }
+
+    public static string? GetServiceRoute(AttributeData attribute)
+    {
+        if (attribute.AttributeClass is
+            {
+                Name: "ServiceAttribute",
+                IsGenericType: false,
+                ContainingType: null,
+                ContainingNamespace:
+                {
+                    Name: "Configuration",
+                    ContainingNamespace:
+                    {
+                        Name: "Grpc",
+                        ContainingNamespace:
+                        {
+                            Name: "ProtoBuf",
+                            ContainingNamespace.IsGlobalNamespace: true,
+                        }
+                    }
+                }
+            })
+        { }
+
+        if (attribute.AttributeClass is
+            {
+                Name: "ServiceContractAttribute",
+                IsGenericType: false,
+                ContainingType: null,
+                ContainingNamespace:
+                {
+                    Name: "ServiceModel",
+                    ContainingNamespace:
+                    {
+                        Name: "System",
+                        ContainingNamespace.IsGlobalNamespace: true,
+                    }
+                }
+            })
+        {
+
+        }
+
+        return null;
+    }
+
     // actual thinking
     private void Generate(SourceProductionContext context, (Compilation Left, ImmutableArray<object> Right) tuple)
     {
     }
 
-}
-internal static class TypeHelpers
-{
-    public static bool IsType(this AttributeData attrib, string ns0, string ns1, string name)
-        => attrib?.AttributeClass is { } type && IsType(type, ns0, ns1, name);
-
-    public static bool IsType(this AttributeData attrib, string ns0, string ns1, string ns2, string name)
-        => attrib?.AttributeClass is { } type && IsType(type, ns0, ns1, ns2, name);
-    public static bool IsType(this INamedTypeSymbol type, string ns0, string ns1, string name)
-    {
-        if (type is not null && type.Name == name && !type.IsGenericType
-            && type.ContainingType is null && type.ContainingNamespace is { } ns && ns.Name == ns1)
-        {
-            ns = ns.ContainingNamespace;
-            if (ns is not null && ns.Name == ns0 && ns.ContainingNamespace.IsGlobalNamespace)
-            {
-                return true;
-            }
-        }
-        return false;
-    }
-    public static bool IsType(this INamedTypeSymbol type, string ns0, string ns1, string ns2, string name)
-    {
-        if (type is not null && type.Name == name && !type.IsGenericType
-            && type.ContainingType is null && type.ContainingNamespace is { } ns && ns.Name == ns2)
-        {
-            ns = ns.ContainingNamespace;
-            if (ns is not null && ns.Name == ns1)
-            {
-                ns = ns.ContainingNamespace;
-                if (ns is not null && ns.Name == ns0 && ns.ContainingNamespace.IsGlobalNamespace)
-                {
-                    return true;
-                }
-            }
-        }
-        return false;
-    }
 }
